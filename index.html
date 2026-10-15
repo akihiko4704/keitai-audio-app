@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#10110f">
+    <title>オーディオブックプレーヤー</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="ホーム">
+          <span class="brand-mark" aria-hidden="true">秋</span>
+          <span>文庫<span class="brand-subtitle">AUDIOBOOK PLAYER</span></span>
+        </a>
+        <span class="local-badge"><span class="status-dot"></span>この端末で再生</span>
+      </header>
+
+      <section class="workspace" aria-label="オーディオブックプレーヤー">
+        <div class="player-column">
+          <div class="section-heading">
+            <span class="eyebrow">YOUR LISTENING SPACE</span>
+            <h1>物語に、<em>耳をすます。</em></h1>
+            <p>手元にあるオーディオブックを、ここでゆっくり楽しもう。</p>
+          </div>
+
+          <div class="now-playing-card">
+            <div class="cover-art" id="coverArt" aria-label="本のカバー">
+              <img class="cover-image" id="coverImage" alt="" hidden>
+              <span class="cover-sun"></span>
+              <span class="cover-title">静かな<br>午後</span>
+              <span class="cover-author">A STORY FOR YOU</span>
+              <span class="cover-number">01</span>
+              <button class="cover-upload" id="coverUploadButton" type="button" aria-label="選択中の本のサムネイル画像を設定" title="サムネイル画像を設定" disabled>▧</button>
+              <input id="coverInput" type="file" accept="image/*" hidden>
+            </div>
+
+            <div class="track-details">
+              <span class="eyebrow">NOW LISTENING</span>
+              <h2 id="trackTitle">まだ本が選ばれていません</h2>
+              <p id="trackMeta">音声ファイルを追加して、再生をはじめましょう。</p>
+              <p class="current-chapter" id="currentChapter" hidden></p>
+              <div class="progress-wrap">
+                <input id="seekBar" class="range seek-range" type="range" min="0" max="1000" value="0" aria-label="再生位置" disabled>
+                <div class="time-row"><span id="currentTime">0:00</span><span id="duration">0:00</span></div>
+              </div>
+              <div class="transport">
+                <button class="icon-button skip-button" id="backButton" type="button" aria-label="15秒戻る" title="15秒戻る">↶<small>15</small></button>
+                <button class="icon-button" id="previousButton" type="button" aria-label="前のトラック" title="前のトラック">|‹</button>
+                <button class="play-button" id="playButton" type="button" aria-label="再生" disabled>
+                  <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                  <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg>
+                </button>
+                <button class="icon-button" id="nextButton" type="button" aria-label="次のトラック" title="次のトラック">›|</button>
+                <button class="icon-button skip-button" id="forwardButton" type="button" aria-label="15秒進む" title="15秒進む">↷<small>15</small></button>
+              </div>
+              <div class="player-options">
+                <div class="playback-settings">
+                  <button class="repeat-button" id="repeatButton" type="button" aria-label="リピート: オフ" title="リピート: オフ" aria-pressed="false">
+                    <span aria-hidden="true">↻</span><small id="repeatBadge" hidden>1</small>
+                  </button>
+                  <label class="speed-control">速度
+                    <select id="speedSelect" aria-label="再生速度">
+                      <option value="0.75">0.75×</option><option value="1" selected>1.0×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2.0×</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="volume-control" for="volumeBar"><span aria-hidden="true">◖</span><input id="volumeBar" class="range volume-range" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="音量"></label>
+              </div>
+            </div>
+          </div>
+
+          <section class="chapters-panel" aria-labelledby="chaptersTitle">
+            <div class="chapters-heading">
+              <div><span class="eyebrow">BOOK CONTENT</span><h2 id="chaptersTitle">チャプター</h2></div>
+              <button class="add-chapter-button" id="addChapterButton" type="button" disabled>＋ 追加</button>
+            </div>
+            <div class="chapter-navigation">
+              <button class="chapter-nav-button" id="previousChapterButton" type="button" disabled>‹ 前のチャプター</button>
+              <span id="chapterPosition">—</span>
+              <button class="chapter-nav-button" id="nextChapterButton" type="button" disabled>次のチャプター ›</button>
+            </div>
+            <p class="chapters-empty" id="chaptersEmpty">チャプター情報がありません。再生位置から追加できます。</p>
+            <ol class="chapter-list" id="chapterList" aria-label="チャプター一覧" hidden></ol>
+          </section>
+
+          <label class="drop-zone" id="dropZone" for="fileInput">
+            <input id="fileInput" type="file" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.ogg,.flac,.opus" multiple>
+            <span class="add-icon" aria-hidden="true">＋</span>
+            <span class="drop-copy"><strong>オーディオブックを追加</strong><small>クリックして選択、またはここに音声ファイルをドロップ</small></span>
+            <span class="file-types">MP3 · M4A · M4B · WAV など</span>
+          </label>
+          <div class="folder-import">
+            <input id="folderInput" type="file" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.ogg,.flac,.opus" webkitdirectory directory multiple hidden>
+            <button id="folderImportButton" type="button">フォルダを検索</button>
+            <p id="folderImportMessage" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <aside class="queue-panel">
+          <div class="queue-heading">
+            <div><span class="eyebrow">UP NEXT</span><h2>再生リスト</h2></div>
+            <span class="track-count" id="trackCount">0 TRACKS</span>
+          </div>
+          <label class="queue-search">
+            <span class="visually-hidden">ファイル名または著者名で検索</span>
+            <input id="queueSearch" type="search" placeholder="ファイル名・著者名で検索" autocomplete="off">
+          </label>
+          <div class="queue-empty" id="queueEmpty"><span aria-hidden="true">♫</span><p>再生リストは空です。<br>音声ファイルを追加してください。</p></div>
+          <p class="queue-no-results" id="queueNoResults" hidden>一致する音源がありません。</p>
+          <ol class="track-list" id="trackList" aria-label="再生リスト"></ol>
+          <button class="clear-button" id="clearButton" type="button" hidden>リストをクリア</button>
+          <p class="privacy-note"><span aria-hidden="true">◈</span> 音声はアップロードされず、このブラウザー内に保存されます。<br>次回も同じ端末・ブラウザーで利用できます。</p>
+        </aside>
+      </section>
+      <footer>TAKE A MOMENT FOR YOURSELF <span>✳</span></footer>
+    </main>
+    <audio id="audioPlayer" preload="metadata"></audio>
+  </body>
+</html>
