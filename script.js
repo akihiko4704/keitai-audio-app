@@ -29,17 +29,231 @@ const chapterPosition = document.querySelector("#chapterPosition");
 const addChapterButton = document.querySelector("#addChapterButton");
 const previousChapterButton = document.querySelector("#previousChapterButton");
 const nextChapterButton = document.querySelector("#nextChapterButton");
+const webDavForm = document.querySelector("#webDavForm");
+const webDavUrlInput = document.querySelector("#webDavUrl");
+const webDavUsernameInput = document.querySelector("#webDavUsername");
+const webDavPasswordInput = document.querySelector("#webDavPassword");
+const webDavConnectButton = document.querySelector("#webDavConnectButton");
+const webDavDisconnectButton = document.querySelector("#webDavDisconnectButton");
+const webDavRefreshButton = document.querySelector("#webDavRefreshButton");
+const webDavStatus = document.querySelector("#webDavStatus");
+const webDavBrowser = document.querySelector("#webDavBrowser");
+const webDavParentButton = document.querySelector("#webDavParentButton");
+const webDavCurrentPath = document.querySelector("#webDavCurrentPath");
+const webDavEmpty = document.querySelector("#webDavEmpty");
+const webDavList = document.querySelector("#webDavList");
 
 let tracks = [];
 let currentIndex = -1;
 let activeUrl = null;
 let repeatMode = "off";
+let webDavConnection = null;
+let webDavDirectories = [];
+let webDavEntries = [];
+let streamProxyReady = null;
 const thumbnails = new Map();
 const chaptersByTrack = new Map();
 const chapterLoadErrors = new Set();
 const trackStorageIds = new Map();
 let audioLibrary = null;
 let audioLibraryReady;
+
+function initializeStreamProxy() {
+  if (streamProxyReady) return streamProxyReady;
+  streamProxyReady = (async () => {
+    if (!("serviceWorker" in navigator) || !window.isSecureContext) {
+      throw new Error("WebDAVのストリーミング再生にはHTTPS接続が必要です。");
+    }
+    await navigator.serviceWorker.register("./service-worker.js");
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+          reject(new Error("ストリーミング中継を開始できませんでした。ページを再読み込みしてください。"));
+        }, 10000);
+        function onControllerChange() {
+          window.clearTimeout(timeout);
+          navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+          resolve();
+        }
+        navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+      });
+    }
+    return navigator.serviceWorker.controller;
+  })();
+  return streamProxyReady;
+}
+
+function isWebDavPath(url) {
+  if (!webDavConnection) return false;
+  try {
+    const target = new URL(url);
+    return target.origin === webDavConnection.origin
+      && target.pathname.startsWith(webDavConnection.basePath);
+  } catch {
+    return false;
+  }
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type !== "webdav-auth-request") return;
+    const port = event.ports[0];
+    if (!port) return;
+    let authorization = null;
+    try {
+      if (isWebDavPath(event.data.url)) authorization = webDavConnection.authorization;
+    } catch (error) {
+      console.error("Could not validate a WebDAV stream request:", error);
+    }
+    port.postMessage({ authorization });
+    port.close();
+  });
+}
+
+function basicAuthorization(username, password) {
+  const bytes = new TextEncoder().encode(`${username}:${password}`);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `Basic ${btoa(binary)}`;
+}
+
+function normalizeWebDavDirectory(value) {
+  const url = new URL(value);
+  if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error("WebDAV URLは認証情報・クエリを含まないHTTP(S)のフォルダーURLを指定してください。");
+  }
+  if (location.protocol === "https:" && url.protocol !== "https:") {
+    throw new Error("HTTPSのページからHTTPのWebDAVには接続できません。WebDAVもHTTPSで公開してください。");
+  }
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
+  return url;
+}
+
+async function fetchWebDavDirectory(url, authorization) {
+  const response = await fetch(url, {
+    method: "PROPFIND",
+    headers: {
+      Authorization: authorization,
+      Depth: "1",
+      "Content-Type": "application/xml; charset=utf-8",
+    },
+    body: '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/><d:getcontentlength/><d:getcontenttype/><d:getlastmodified/></d:prop></d:propfind>',
+    mode: "cors",
+    credentials: "omit",
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("認証に失敗しました。ユーザー名とパスワードを確認してください。");
+  }
+  if (response.status !== 207) {
+    throw new Error(`WebDAV一覧の取得に失敗しました（HTTP ${response.status}）。`);
+  }
+  const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
+  if (xml.documentElement.localName === "parsererror") {
+    throw new Error("WebDAVサーバーから不正なXML応答が返されました。");
+  }
+
+  const root = new URL(url);
+  const items = [];
+  for (const item of xml.getElementsByTagNameNS("*", "response")) {
+    const href = item.getElementsByTagNameNS("*", "href")[0]?.textContent?.trim();
+    if (!href) continue;
+    const itemUrl = new URL(href, url);
+    if (itemUrl.origin !== root.origin || !itemUrl.pathname.startsWith(root.pathname)) continue;
+    const propstat = Array.from(item.getElementsByTagNameNS("*", "propstat")).find((entry) =>
+      /^HTTP\/\d(?:\.\d)? 2\d\d/.test(entry.getElementsByTagNameNS("*", "status")[0]?.textContent?.trim() || "")
+    );
+    const properties = propstat?.getElementsByTagNameNS("*", "prop")[0];
+    if (!properties) continue;
+    const resourceType = properties.getElementsByTagNameNS("*", "resourcetype")[0];
+    const isDirectory = Boolean(resourceType?.getElementsByTagNameNS("*", "collection").length);
+    const normalizedPath = itemUrl.pathname.endsWith("/") ? itemUrl.pathname : `${itemUrl.pathname}/`;
+    if (isDirectory && normalizedPath === root.pathname) continue;
+    const fallbackName = decodeURIComponent(itemUrl.pathname.split("/").filter(Boolean).at(-1) || "");
+    const name = properties.getElementsByTagNameNS("*", "displayname")[0]?.textContent?.trim() || fallbackName;
+    const contentType = properties.getElementsByTagNameNS("*", "getcontenttype")[0]?.textContent?.trim() || "";
+    if (!isDirectory && !contentType.startsWith("audio/") && !/\.(mp3|m4a|m4b|aac|wav|ogg|flac|opus)$/i.test(name)) continue;
+    items.push({
+      name,
+      url: itemUrl.toString(),
+      isDirectory,
+      contentType,
+      size: Number(properties.getElementsByTagNameNS("*", "getcontentlength")[0]?.textContent || 0),
+    });
+  }
+  return items.sort((left, right) =>
+    Number(right.isDirectory) - Number(left.isDirectory) || left.name.localeCompare(right.name, "ja")
+  );
+}
+
+function renderWebDavEntries() {
+  webDavList.replaceChildren();
+  webDavEntries.forEach((entry) => {
+    const item = document.createElement("li");
+    item.className = "webdav-item";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "webdav-entry";
+    const icon = document.createElement("span");
+    icon.className = "webdav-entry-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = entry.isDirectory ? "▰" : "♫";
+    const name = document.createElement("span");
+    name.className = "webdav-entry-name";
+    name.textContent = entry.name;
+    const detail = document.createElement("span");
+    detail.className = "webdav-entry-detail";
+    detail.textContent = entry.isDirectory ? "フォルダー" : entry.size ? formatSize(entry.size) : "再生";
+    button.append(icon, name, detail);
+    button.addEventListener("click", () => {
+      if (entry.isDirectory) {
+        webDavDirectories.push(entry.url);
+        browseWebDavDirectory(entry.url).catch(showWebDavError);
+      } else {
+        addWebDavTrack(entry);
+      }
+    });
+    item.append(button);
+    webDavList.append(item);
+  });
+  webDavEmpty.hidden = webDavEntries.length > 0;
+}
+
+function showWebDavError(error) {
+  console.error("WebDAV operation failed:", error);
+  webDavStatus.textContent = error instanceof TypeError
+    ? "WebDAVに接続できません。URL、HTTPS、サーバーのCORS設定（PROPFIND・Authorization・Range）を確認してください。"
+    : error.message || "WebDAVの操作に失敗しました。";
+}
+
+async function browseWebDavDirectory(url) {
+  webDavStatus.textContent = "フォルダーを読み込んでいます…";
+  const entries = await fetchWebDavDirectory(url, webDavConnection.authorization);
+  webDavEntries = entries;
+  webDavCurrentPath.textContent = `/${decodeURIComponent(new URL(url).pathname.slice(webDavConnection.basePath.length))}`;
+  webDavParentButton.disabled = webDavDirectories.length < 2;
+  webDavBrowser.hidden = false;
+  webDavDisconnectButton.disabled = false;
+  webDavRefreshButton.disabled = false;
+  renderWebDavEntries();
+  webDavStatus.textContent = `${entries.length} 件の項目を表示しています。音源を選ぶと再生リストに追加して再生します。`;
+}
+
+function addWebDavTrack(entry) {
+  const existingIndex = tracks.findIndex((track) => track.remoteUrl === entry.url);
+  if (existingIndex >= 0) {
+    loadTrack(existingIndex, true);
+    return;
+  }
+  const track = { name: entry.name, remoteUrl: entry.url, size: entry.size };
+  const index = tracks.push(track) - 1;
+  updateQueue();
+  saveTracks([track]).then((saved) => {
+    if (!saved) webDavStatus.textContent = "再生は開始しましたが、この音源を次回のために保存できませんでした。";
+  });
+  loadTrack(index, true);
+}
 
 function openAudioLibrary() {
   return new Promise((resolve, reject) => {
@@ -84,7 +298,7 @@ function initializeAudioLibrary() {
       if (!track.remoteUrl) loadTrackMetadata([track]);
     }
     updateQueue();
-    if (tracks.length > 0) loadTrack(0);
+    if (tracks.length > 0 && !tracks[0].remoteUrl) loadTrack(0);
     return database;
   }).catch((error) => {
     console.error("Could not restore the audio library:", error);
@@ -584,6 +798,7 @@ function updateQueue() {
     const select = document.createElement("button");
     select.type = "button";
     select.className = "track-select";
+    select.disabled = Boolean(track.remoteUrl && !isWebDavPath(track.remoteUrl));
     select.setAttribute("aria-label", `${index + 1}番目のトラックを再生: ${track.name}`);
     select.setAttribute("aria-pressed", String(index === currentIndex));
 
@@ -633,7 +848,16 @@ function loadTrack(index, autoplay = false) {
   releaseActiveUrl();
   currentIndex = index;
   const track = tracks[index];
-  if (track.remoteUrl) audio.src = track.remoteUrl;
+  if (track.remoteUrl) {
+    if (isWebDavPath(track.remoteUrl)) {
+      const proxyUrl = new URL("./webdav-stream", location.href);
+      proxyUrl.searchParams.set("url", track.remoteUrl);
+      audio.src = proxyUrl.toString();
+    } else {
+      audio.removeAttribute("src");
+      audio.load();
+    }
+  }
   else {
     activeUrl = URL.createObjectURL(track);
     audio.src = activeUrl;
@@ -641,9 +865,12 @@ function loadTrack(index, autoplay = false) {
   audio.loop = repeatMode === "one";
   showThumbnail();
   trackTitle.textContent = track.name.replace(/\.[^.]+$/, "");
-  trackMeta.textContent = track.remoteUrl ? "ネットワーク音源をストリーミング" : "ローカルオーディオブック";
-  playButton.disabled = false;
-  seekBar.disabled = false;
+  trackMeta.textContent = track.remoteUrl
+    ? webDavConnection && isWebDavPath(track.remoteUrl) ? "WebDAVからストリーミング再生" : "WebDAVに接続して再生してください"
+    : "ローカルオーディオブック";
+  const unavailable = Boolean(track.remoteUrl && !isWebDavPath(track.remoteUrl));
+  playButton.disabled = unavailable;
+  seekBar.disabled = unavailable;
   currentTimeLabel.textContent = "0:00";
   durationLabel.textContent = "0:00";
   updateQueue();
@@ -861,6 +1088,84 @@ fileInput.addEventListener("change", (event) => {
   fileInput.value = "";
 });
 
+webDavForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  webDavConnectButton.disabled = true;
+  const previousConnection = webDavConnection;
+  const previousDirectories = webDavDirectories;
+  try {
+    const baseUrl = normalizeWebDavDirectory(webDavUrlInput.value);
+    webDavStatus.textContent = "WebDAVへ接続しています…";
+    await initializeStreamProxy();
+    webDavConnection = {
+      origin: baseUrl.origin,
+      basePath: baseUrl.pathname,
+      authorization: basicAuthorization(webDavUsernameInput.value, webDavPasswordInput.value),
+    };
+    webDavDirectories = [baseUrl.toString()];
+    await browseWebDavDirectory(baseUrl.toString());
+    webDavUrlInput.value = baseUrl.toString();
+    webDavPasswordInput.value = "";
+    const selectedTrack = tracks[currentIndex];
+    if (selectedTrack?.remoteUrl) {
+      const selectedIndex = isWebDavPath(selectedTrack.remoteUrl)
+        ? currentIndex
+        : tracks.findIndex((track) => track.remoteUrl && isWebDavPath(track.remoteUrl));
+      if (selectedIndex >= 0) {
+        loadTrack(selectedIndex);
+      } else {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        playButton.disabled = true;
+        seekBar.disabled = true;
+        trackMeta.textContent = "この音源は現在接続中のWebDAVとは異なります。";
+      }
+    } else if (currentIndex < 0) {
+      const savedTrackIndex = tracks.findIndex((track) => track.remoteUrl && isWebDavPath(track.remoteUrl));
+      if (savedTrackIndex >= 0) loadTrack(savedTrackIndex);
+    }
+  } catch (error) {
+    webDavConnection = previousConnection;
+    webDavDirectories = previousDirectories;
+    showWebDavError(error);
+  } finally {
+    webDavConnectButton.disabled = false;
+  }
+});
+
+webDavDisconnectButton.addEventListener("click", () => {
+  webDavConnection = null;
+  webDavDirectories = [];
+  webDavEntries = [];
+  webDavBrowser.hidden = true;
+  webDavDisconnectButton.disabled = true;
+  webDavRefreshButton.disabled = true;
+  webDavParentButton.disabled = true;
+  webDavList.replaceChildren();
+  webDavStatus.textContent = "WebDAVから切断しました。認証情報はこの画面から破棄されました。";
+  if (tracks[currentIndex]?.remoteUrl) {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    playButton.disabled = true;
+    seekBar.disabled = true;
+    trackMeta.textContent = "WebDAVに再接続して再生してください";
+  }
+  updateQueue();
+});
+
+webDavRefreshButton.addEventListener("click", () => {
+  const currentDirectory = webDavDirectories.at(-1);
+  if (currentDirectory) browseWebDavDirectory(currentDirectory).catch(showWebDavError);
+});
+
+webDavParentButton.addEventListener("click", () => {
+  if (webDavDirectories.length < 2) return;
+  webDavDirectories.pop();
+  browseWebDavDirectory(webDavDirectories.at(-1)).catch(showWebDavError);
+});
+
 folderImportButton.addEventListener("click", () => folderInput.click());
 
 folderInput.addEventListener("change", () => {
@@ -946,7 +1251,9 @@ audio.addEventListener("loadedmetadata", () => {
 
 audio.addEventListener("error", () => {
   if (tracks[currentIndex]?.remoteUrl) {
-    trackMeta.textContent = "音声を読み込めません。URL、Tailscale接続、配信元の設定を確認してください。";
+    trackMeta.textContent = webDavConnection && isWebDavPath(tracks[currentIndex].remoteUrl)
+      ? "音声を読み込めません。WebDAVサーバーのCORS設定（GET・Authorization・Range）とファイルURLを確認してください。"
+      : "WebDAVに接続してから再生してください。";
   }
 });
 

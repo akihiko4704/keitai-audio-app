@@ -86,6 +86,40 @@
             <ol class="chapter-list" id="chapterList" aria-label="チャプター一覧" hidden></ol>
           </section>
 
+          <section class="webdav-panel" aria-labelledby="webDavTitle">
+            <div class="webdav-heading">
+              <div><span class="eyebrow">NETWORK LIBRARY</span><h2 id="webDavTitle">WebDAVライブラリ</h2></div>
+              <span class="webdav-lock" aria-hidden="true">◈</span>
+            </div>
+            <form id="webDavForm" class="webdav-form">
+              <label>WebDAVフォルダーURL
+                <input id="webDavUrl" type="url" inputmode="url" placeholder="https://example.com/dav/books/" autocomplete="url" required>
+              </label>
+              <div class="webdav-credentials">
+                <label>ユーザー名
+                  <input id="webDavUsername" type="text" autocomplete="username">
+                </label>
+                <label>パスワード
+                  <input id="webDavPassword" type="password" autocomplete="current-password">
+                </label>
+              </div>
+              <div class="webdav-actions">
+                <button type="submit" id="webDavConnectButton">接続</button>
+                <button type="button" id="webDavDisconnectButton" disabled>切断</button>
+                <button type="button" id="webDavRefreshButton" disabled>更新</button>
+              </div>
+            </form>
+            <p id="webDavStatus" class="webdav-status" aria-live="polite">接続先と認証情報はこのブラウザー内だけで使用します。</p>
+            <div id="webDavBrowser" class="webdav-browser" hidden>
+              <div class="webdav-pathbar">
+                <button id="webDavParentButton" type="button" disabled aria-label="親フォルダーへ">‹ 戻る</button>
+                <span id="webDavCurrentPath"></span>
+              </div>
+              <p id="webDavEmpty" class="webdav-empty" hidden>このフォルダーに音声ファイルはありません。</p>
+              <ul id="webDavList" class="webdav-list" aria-label="WebDAVフォルダー"></ul>
+            </div>
+          </section>
+
           <label class="drop-zone" id="dropZone" for="fileInput">
             <input id="fileInput" type="file" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.ogg,.flac,.opus" multiple>
             <span class="add-icon" aria-hidden="true">＋</span>
@@ -112,7 +146,7 @@
           <p class="queue-no-results" id="queueNoResults" hidden>一致する音源がありません。</p>
           <ol class="track-list" id="trackList" aria-label="再生リスト"></ol>
           <button class="clear-button" id="clearButton" type="button" hidden>リストをクリア</button>
-          <p class="privacy-note"><span aria-hidden="true">◈</span> 音声はアップロードされず、このブラウザー内に保存されます。<br>次回も同じ端末・ブラウザーで利用できます。</p>
+          <p class="privacy-note"><span aria-hidden="true">◈</span> 端末から追加した音源はアップロードせず、このブラウザー内に保存します。<br>WebDAV音源はURLのみ保存し、認証情報は接続中だけ使用します。</p>
         </aside>
       </section>
       <footer>TAKE A MOMENT FOR YOURSELF <span>✳</span></footer>

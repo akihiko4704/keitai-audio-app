@@ -97,6 +97,33 @@ button { color: inherit; }
 .chapter-select:hover, .chapter-select.is-active { border-color: rgba(200,212,154,.16); background: rgba(200,212,154,.05); color: var(--accent); }
 .chapter-time { color: #81837b; font: 9px var(--mono); }
 .chapter-name { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.webdav-panel { margin-top: 17px; padding: 19px 20px 14px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.018); }
+.webdav-heading { display: flex; align-items: center; justify-content: space-between; }
+.webdav-heading h2 { margin: 5px 0 0; font-size: 14px; font-weight: 500; }
+.webdav-lock { color: var(--accent); font-size: 15px; }
+.webdav-form { display: grid; gap: 10px; margin-top: 15px; }
+.webdav-form label { display: grid; min-width: 0; gap: 5px; color: #a5a79f; font-size: 9px; }
+.webdav-form input { width: 100%; min-width: 0; min-height: 36px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: rgba(255,255,255,.025); color: #f3f0e8; font-size: 11px; }
+.webdav-form input:focus { border-color: rgba(200,212,154,.55); }
+.webdav-form input::placeholder { color: #777970; }
+.webdav-credentials { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.webdav-actions { display: flex; gap: 8px; }
+.webdav-actions button, .webdav-pathbar button { min-height: 36px; padding: 7px 12px; border: 1px solid rgba(200,212,154,.3); border-radius: 4px; background: transparent; color: var(--accent); cursor: pointer; font-size: 10px; }
+.webdav-actions button:hover:not(:disabled), .webdav-pathbar button:hover:not(:disabled) { background: rgba(200,212,154,.08); }
+.webdav-actions button:disabled, .webdav-pathbar button:disabled { cursor: default; opacity: .4; }
+.webdav-status, .webdav-empty { margin: 10px 0 0; color: var(--muted); font-size: 9px; line-height: 1.7; overflow-wrap: anywhere; }
+.webdav-browser { margin-top: 12px; border-top: 1px solid var(--line); }
+.webdav-browser[hidden] { display: none; }
+.webdav-pathbar { display: flex; align-items: center; gap: 10px; padding: 9px 0 6px; }
+.webdav-pathbar button { flex: 0 0 auto; min-height: 32px; padding: 5px 9px; }
+.webdav-pathbar span { overflow: hidden; color: #a5a79f; font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.webdav-list { display: flex; max-height: 250px; flex-direction: column; gap: 3px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.webdav-item { min-width: 0; }
+.webdav-entry { display: grid; width: 100%; min-height: 42px; grid-template-columns: 22px minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #c3c4bb; cursor: pointer; text-align: left; }
+.webdav-entry:hover { border-color: rgba(200,212,154,.16); background: rgba(200,212,154,.05); color: var(--accent); }
+.webdav-entry-icon { color: var(--accent); text-align: center; }
+.webdav-entry-name { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.webdav-entry-detail { color: #85877e; font: 8px var(--mono); }
 .drop-zone { display: flex; min-height: 76px; align-items: center; gap: 14px; margin-top: 16px; padding: 14px 20px; border: 1px dashed rgba(235,231,214,.19); border-radius: 6px; cursor: pointer; transition: border-color .2s, background .2s; }
 .drop-zone:hover, .drop-zone.is-dragging { border-color: rgba(200,212,154,.7); background: rgba(200,212,154,.045); }
 .drop-zone input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; clip-path: inset(50%); }
@@ -185,6 +212,11 @@ footer span { padding-left: 8px; color: #92977c; }
   .chapters-panel { padding: 16px; }
   .add-chapter-button { min-height: 44px; padding: 8px 12px; }
   .chapter-nav-button { min-height: 44px; }
+  .webdav-panel { padding: 16px; }
+  .webdav-form input { min-height: 44px; }
+  .webdav-actions button { min-height: 44px; }
+  .webdav-pathbar button { min-height: 44px; }
+  .webdav-entry { min-height: 48px; }
   .drop-zone { flex-wrap: wrap; gap: 10px; padding: 13px; }
   .drop-zone { min-height: 80px; }
   .drop-copy small { font-size: 8px; }
