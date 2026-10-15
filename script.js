@@ -42,6 +42,19 @@ const webDavParentButton = document.querySelector("#webDavParentButton");
 const webDavCurrentPath = document.querySelector("#webDavCurrentPath");
 const webDavEmpty = document.querySelector("#webDavEmpty");
 const webDavList = document.querySelector("#webDavList");
+const jellyfinForm = document.querySelector("#jellyfinForm");
+const jellyfinUrlInput = document.querySelector("#jellyfinUrl");
+const jellyfinUsernameInput = document.querySelector("#jellyfinUsername");
+const jellyfinPasswordInput = document.querySelector("#jellyfinPassword");
+const jellyfinConnectButton = document.querySelector("#jellyfinConnectButton");
+const jellyfinDisconnectButton = document.querySelector("#jellyfinDisconnectButton");
+const jellyfinRefreshButton = document.querySelector("#jellyfinRefreshButton");
+const jellyfinStatus = document.querySelector("#jellyfinStatus");
+const jellyfinBrowser = document.querySelector("#jellyfinBrowser");
+const jellyfinParentButton = document.querySelector("#jellyfinParentButton");
+const jellyfinCurrentPath = document.querySelector("#jellyfinCurrentPath");
+const jellyfinEmpty = document.querySelector("#jellyfinEmpty");
+const jellyfinList = document.querySelector("#jellyfinList");
 
 let tracks = [];
 let currentIndex = -1;
@@ -51,6 +64,9 @@ let webDavConnection = null;
 let webDavDirectories = [];
 let webDavEntries = [];
 let streamProxyReady = null;
+let jellyfinConnection = null;
+let jellyfinDirectories = [];
+let jellyfinEntries = [];
 const thumbnails = new Map();
 const chaptersByTrack = new Map();
 const chapterLoadErrors = new Set();
@@ -255,6 +271,205 @@ function addWebDavTrack(entry) {
   loadTrack(index, true);
 }
 
+function normalizeJellyfinUrl(value) {
+  const url = new URL(value);
+  if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error("Jellyfin URLは認証情報・クエリを含まないHTTP(S)のサーバーURLを指定してください。");
+  }
+  if (location.protocol === "https:" && url.protocol !== "https:") {
+    throw new Error("HTTPのJellyfinを使う場合は、アプリもHTTPで配信して http:// のURLから開いてください。HTTPSページからHTTPへの接続はブラウザーにブロックされます。");
+  }
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
+  return url;
+}
+
+function jellyfinAuthorizationHeader() {
+  return 'MediaBrowser Client="文庫 AudioBook Player", Device="Web Browser", DeviceId="keitai-audio-app", Version="1.0"';
+}
+
+async function fetchJellyfinJson(path, parameters = {}) {
+  const requestUrl = new URL(path, jellyfinConnection.serverUrl);
+  requestUrl.search = new URLSearchParams({
+    ...parameters,
+    api_key: jellyfinConnection.accessToken,
+  }).toString();
+  const response = await fetch(requestUrl, { cache: "no-store", redirect: "error" });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Jellyfinの認証に失敗しました。再接続してログイン情報を確認してください。");
+  }
+  if (!response.ok) {
+    throw new Error(`Jellyfinから情報を取得できませんでした（HTTP ${response.status}）。`);
+  }
+  return response.json();
+}
+
+function isJellyfinTrack(track) {
+  return Boolean(track?.jellyfinItem);
+}
+
+function isActiveJellyfinTrack(track) {
+  if (!jellyfinConnection || !isJellyfinTrack(track)) return false;
+  try {
+    return new URL(track.jellyfinItem.serverUrl).href === jellyfinConnection.serverUrl
+      && track.jellyfinItem.userId === jellyfinConnection.userId;
+  } catch {
+    return false;
+  }
+}
+
+function isRemoteTrack(track) {
+  return Boolean(track?.remoteUrl || isJellyfinTrack(track));
+}
+
+function jellyfinStreamUrl(track) {
+  const { itemId, userId } = track.jellyfinItem;
+  const url = new URL(`Audio/${encodeURIComponent(itemId)}/stream`, jellyfinConnection.serverUrl);
+  url.search = new URLSearchParams({
+    static: "true",
+    UserId: userId,
+    api_key: jellyfinConnection.accessToken,
+  }).toString();
+  return url.toString();
+}
+
+function isJellyfinAudio(item) {
+  return item.MediaType === "Audio" || ["Audio", "AudioBook"].includes(item.Type);
+}
+
+function isJellyfinFolder(item) {
+  return Boolean(item.IsFolder) || ["Folder", "CollectionFolder", "MusicAlbum", "Playlist"].includes(item.Type);
+}
+
+async function fetchJellyfinChildren(folderId) {
+  const items = [];
+  const limit = 200;
+  let startIndex = 0;
+  while (true) {
+    const page = await fetchJellyfinJson(`Users/${encodeURIComponent(jellyfinConnection.userId)}/Items`, {
+      ParentId: folderId,
+      Recursive: "false",
+      StartIndex: String(startIndex),
+      Limit: String(limit),
+      Fields: "Artists,AlbumArtist",
+      SortBy: "SortName",
+      SortOrder: "Ascending",
+      EnableTotalRecordCount: "true",
+    });
+    if (!Array.isArray(page.Items)) {
+      throw new Error("Jellyfinからフォルダー項目を読み取れませんでした。");
+    }
+    const pageItems = page.Items;
+    items.push(...pageItems.filter((item) => isJellyfinFolder(item) || isJellyfinAudio(item)));
+    if (pageItems.length === 0) break;
+    startIndex += pageItems.length;
+    if (Number.isFinite(page.TotalRecordCount)) {
+      if (startIndex >= page.TotalRecordCount) break;
+    } else if (pageItems.length < limit) {
+      break;
+    }
+  }
+  return items.sort((left, right) =>
+    Number(isJellyfinFolder(right)) - Number(isJellyfinFolder(left))
+      || String(left.SortName || left.Name).localeCompare(String(right.SortName || right.Name), "ja")
+  );
+}
+
+function showJellyfinError(error) {
+  console.error("Jellyfin operation failed:", error);
+  jellyfinStatus.textContent = error instanceof TypeError
+    ? location.protocol === "https:"
+      ? "Jellyfinに接続できません。HTTPのJellyfinを使う場合は、アプリもHTTPで開いてください。HTTPSページからHTTPへの接続はブラウザーにブロックされます。"
+      : "Jellyfinに接続できません。サーバーURL、ネットワーク接続、JellyfinのCORS許可オリジンを確認してください。"
+    : error.message || "Jellyfinの操作に失敗しました。";
+}
+
+async function browseJellyfinDirectory(folderId = null) {
+  jellyfinStatus.textContent = "ライブラリを読み込んでいます…";
+  let items;
+  if (folderId) {
+    items = await fetchJellyfinChildren(folderId);
+  } else {
+    const libraries = await fetchJellyfinJson(`Users/${encodeURIComponent(jellyfinConnection.userId)}/Views`);
+    if (!Array.isArray(libraries.Items)) {
+      throw new Error("Jellyfinからライブラリ一覧を読み取れませんでした。");
+    }
+    items = libraries.Items;
+  }
+  jellyfinEntries = items.filter((item) =>
+    item.Id && (isJellyfinFolder(item) || isJellyfinAudio(item))
+  );
+  jellyfinCurrentPath.textContent = jellyfinDirectories.map((directory) => directory.name).join(" / ");
+  jellyfinParentButton.disabled = jellyfinDirectories.length < 2;
+  jellyfinBrowser.hidden = false;
+  jellyfinDisconnectButton.disabled = false;
+  jellyfinRefreshButton.disabled = false;
+  renderJellyfinEntries();
+  jellyfinStatus.textContent = `${jellyfinEntries.length} 件の項目を表示しています。音源はダウンロードせずストリーミング再生します。`;
+}
+
+function renderJellyfinEntries() {
+  jellyfinList.replaceChildren();
+  jellyfinEntries.forEach((entry) => {
+    const item = document.createElement("li");
+    item.className = "webdav-item";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "webdav-entry";
+    const icon = document.createElement("span");
+    icon.className = "webdav-entry-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = isJellyfinFolder(entry) ? "▰" : "♫";
+    const name = document.createElement("span");
+    name.className = "webdav-entry-name";
+    name.textContent = entry.Name || "名前のない項目";
+    const detail = document.createElement("span");
+    detail.className = "webdav-entry-detail";
+    detail.textContent = isJellyfinFolder(entry) ? "フォルダー" : "ストリーム";
+    button.append(icon, name, detail);
+    button.addEventListener("click", () => {
+      if (isJellyfinFolder(entry)) {
+        jellyfinDirectories.push({ id: entry.Id, name: entry.Name || "フォルダー" });
+        browseJellyfinDirectory(entry.Id).catch((error) => {
+          jellyfinDirectories.pop();
+          showJellyfinError(error);
+        });
+      } else {
+        addJellyfinTrack(entry);
+      }
+    });
+    item.append(button);
+    jellyfinList.append(item);
+  });
+  jellyfinEmpty.hidden = jellyfinEntries.length > 0;
+}
+
+function addJellyfinTrack(item) {
+  const existingIndex = tracks.findIndex((track) =>
+    track.jellyfinItem?.itemId === item.Id
+      && track.jellyfinItem.serverUrl === jellyfinConnection.serverUrl
+      && track.jellyfinItem.userId === jellyfinConnection.userId
+  );
+  if (existingIndex >= 0) {
+    loadTrack(existingIndex, true);
+    return;
+  }
+  const track = {
+    name: item.Name || "オーディオブック",
+    author: item.AlbumArtist || item.Artists?.join(", ") || "",
+    jellyfinItem: {
+      serverUrl: jellyfinConnection.serverUrl,
+      userId: jellyfinConnection.userId,
+      itemId: item.Id,
+    },
+  };
+  const index = tracks.push(track) - 1;
+  updateQueue();
+  saveTracks([track]).then((saved) => {
+    if (!saved) jellyfinStatus.textContent = "再生は開始しましたが、再生リストの保存に失敗しました。";
+  });
+  loadTrack(index, true);
+}
+
 function openAudioLibrary() {
   return new Promise((resolve, reject) => {
     if (!window.indexedDB) {
@@ -287,7 +502,9 @@ function initializeAudioLibrary() {
     audioLibrary = database;
     const storedTracks = await readStoredTracks(database);
     for (const storedTrack of storedTracks) {
-      const track = storedTrack.remoteUrl
+      const track = storedTrack.jellyfinItem
+        ? { name: storedTrack.name, author: storedTrack.author || "", jellyfinItem: storedTrack.jellyfinItem }
+        : storedTrack.remoteUrl
         ? { name: storedTrack.name, remoteUrl: storedTrack.remoteUrl }
         : new File([storedTrack.blob], storedTrack.name, {
             type: storedTrack.type,
@@ -295,10 +512,10 @@ function initializeAudioLibrary() {
           });
       tracks.push(track);
       trackStorageIds.set(track, storedTrack.id);
-      if (!track.remoteUrl) loadTrackMetadata([track]);
+      if (!isRemoteTrack(track)) loadTrackMetadata([track]);
     }
     updateQueue();
-    if (tracks.length > 0 && !tracks[0].remoteUrl) loadTrack(0);
+    if (tracks.length > 0 && !isRemoteTrack(tracks[0])) loadTrack(0);
     return database;
   }).catch((error) => {
     console.error("Could not restore the audio library:", error);
@@ -327,6 +544,9 @@ async function writeAudioLibrary(write) {
 }
 
 function storedTrackRecord(track) {
+  if (isJellyfinTrack(track)) {
+    return { name: track.name, author: track.author || "", jellyfinItem: track.jellyfinItem };
+  }
   if (track.remoteUrl) return { name: track.name, remoteUrl: track.remoteUrl };
   return {
     name: track.name,
@@ -798,13 +1018,16 @@ function updateQueue() {
     const select = document.createElement("button");
     select.type = "button";
     select.className = "track-select";
-    select.disabled = Boolean(track.remoteUrl && !isWebDavPath(track.remoteUrl));
+    select.disabled = Boolean(
+      (track.remoteUrl && !isWebDavPath(track.remoteUrl))
+      || (isJellyfinTrack(track) && !isActiveJellyfinTrack(track))
+    );
     select.setAttribute("aria-label", `${index + 1}番目のトラックを再生: ${track.name}`);
     select.setAttribute("aria-pressed", String(index === currentIndex));
 
     const size = document.createElement("span");
     size.className = "track-size";
-    size.textContent = track.remoteUrl ? "STREAM" : formatSize(track.size);
+    size.textContent = isRemoteTrack(track) ? "STREAM" : formatSize(track.size);
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -848,7 +1071,14 @@ function loadTrack(index, autoplay = false) {
   releaseActiveUrl();
   currentIndex = index;
   const track = tracks[index];
-  if (track.remoteUrl) {
+  if (isJellyfinTrack(track)) {
+    if (isActiveJellyfinTrack(track)) {
+      audio.src = jellyfinStreamUrl(track);
+    } else {
+      audio.removeAttribute("src");
+      audio.load();
+    }
+  } else if (track.remoteUrl) {
     if (isWebDavPath(track.remoteUrl)) {
       const proxyUrl = new URL("./webdav-stream", location.href);
       proxyUrl.searchParams.set("url", track.remoteUrl);
@@ -865,10 +1095,15 @@ function loadTrack(index, autoplay = false) {
   audio.loop = repeatMode === "one";
   showThumbnail();
   trackTitle.textContent = track.name.replace(/\.[^.]+$/, "");
-  trackMeta.textContent = track.remoteUrl
+  trackMeta.textContent = isJellyfinTrack(track)
+    ? isActiveJellyfinTrack(track) ? "Jellyfinからストリーミング再生（ダウンロードなし）" : "Jellyfinに接続して再生してください"
+    : track.remoteUrl
     ? webDavConnection && isWebDavPath(track.remoteUrl) ? "WebDAVからストリーミング再生" : "WebDAVに接続して再生してください"
     : "ローカルオーディオブック";
-  const unavailable = Boolean(track.remoteUrl && !isWebDavPath(track.remoteUrl));
+  const unavailable = Boolean(
+    (track.remoteUrl && !isWebDavPath(track.remoteUrl))
+    || (isJellyfinTrack(track) && !isActiveJellyfinTrack(track))
+  );
   playButton.disabled = unavailable;
   seekBar.disabled = unavailable;
   currentTimeLabel.textContent = "0:00";
@@ -1088,6 +1323,102 @@ fileInput.addEventListener("change", (event) => {
   fileInput.value = "";
 });
 
+jellyfinForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  jellyfinConnectButton.disabled = true;
+  const previousConnection = jellyfinConnection;
+  const previousDirectories = jellyfinDirectories;
+  try {
+    const serverUrl = normalizeJellyfinUrl(jellyfinUrlInput.value);
+    jellyfinStatus.textContent = "Jellyfinへログインしています…";
+    const response = await fetch(new URL("Users/AuthenticateByName", serverUrl), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Emby-Authorization": jellyfinAuthorizationHeader(),
+      },
+      body: JSON.stringify({
+        Username: jellyfinUsernameInput.value,
+        Pw: jellyfinPasswordInput.value,
+      }),
+      cache: "no-store",
+      redirect: "error",
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("ログインできません。ユーザー名とパスワードを確認してください。");
+    }
+    if (!response.ok) {
+      throw new Error(`Jellyfinへのログインに失敗しました（HTTP ${response.status}）。`);
+    }
+    const result = await response.json();
+    if (!result.AccessToken || !result.User?.Id) {
+      throw new Error("Jellyfinから有効なログイン情報が返されませんでした。");
+    }
+
+    jellyfinConnection = {
+      serverUrl: serverUrl.href,
+      accessToken: result.AccessToken,
+      userId: result.User.Id,
+    };
+    jellyfinDirectories = [{ id: null, name: "ライブラリ" }];
+    await browseJellyfinDirectory();
+    jellyfinUrlInput.value = serverUrl.href;
+    jellyfinPasswordInput.value = "";
+    const selectedTrack = tracks[currentIndex];
+    if (isJellyfinTrack(selectedTrack)) {
+      const selectedIndex = isActiveJellyfinTrack(selectedTrack)
+        ? currentIndex
+        : tracks.findIndex((track) => isActiveJellyfinTrack(track));
+      if (selectedIndex >= 0) loadTrack(selectedIndex);
+      else loadTrack(currentIndex);
+    } else if (currentIndex < 0) {
+      const savedTrackIndex = tracks.findIndex((track) => isActiveJellyfinTrack(track));
+      if (savedTrackIndex >= 0) loadTrack(savedTrackIndex);
+    }
+  } catch (error) {
+    jellyfinConnection = previousConnection;
+    jellyfinDirectories = previousDirectories;
+    showJellyfinError(error);
+  } finally {
+    jellyfinConnectButton.disabled = false;
+  }
+});
+
+jellyfinDisconnectButton.addEventListener("click", () => {
+  jellyfinConnection = null;
+  jellyfinDirectories = [];
+  jellyfinEntries = [];
+  jellyfinBrowser.hidden = true;
+  jellyfinDisconnectButton.disabled = true;
+  jellyfinRefreshButton.disabled = true;
+  jellyfinParentButton.disabled = true;
+  jellyfinList.replaceChildren();
+  jellyfinStatus.textContent = "Jellyfinから切断しました。ログイン情報は破棄されました。";
+  if (isJellyfinTrack(tracks[currentIndex])) {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    playButton.disabled = true;
+    seekBar.disabled = true;
+    trackMeta.textContent = "Jellyfinに再接続して再生してください";
+  }
+  updateQueue();
+});
+
+jellyfinRefreshButton.addEventListener("click", () => {
+  const currentDirectory = jellyfinDirectories.at(-1);
+  if (currentDirectory) browseJellyfinDirectory(currentDirectory.id).catch(showJellyfinError);
+});
+
+jellyfinParentButton.addEventListener("click", () => {
+  if (jellyfinDirectories.length < 2) return;
+  const directory = jellyfinDirectories.pop();
+  browseJellyfinDirectory(jellyfinDirectories.at(-1).id).catch((error) => {
+    jellyfinDirectories.push(directory);
+    showJellyfinError(error);
+  });
+});
+
 webDavForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   webDavConnectButton.disabled = true;
@@ -1250,7 +1581,11 @@ audio.addEventListener("loadedmetadata", () => {
 });
 
 audio.addEventListener("error", () => {
-  if (tracks[currentIndex]?.remoteUrl) {
+  if (isJellyfinTrack(tracks[currentIndex])) {
+    trackMeta.textContent = isActiveJellyfinTrack(tracks[currentIndex])
+      ? "音声を読み込めません。JellyfinのCORS設定、音声形式、ストリームへのアクセス権を確認してください。"
+      : "Jellyfinに接続してから再生してください。";
+  } else if (tracks[currentIndex]?.remoteUrl) {
     trackMeta.textContent = webDavConnection && isWebDavPath(tracks[currentIndex].remoteUrl)
       ? "音声を読み込めません。WebDAVサーバーのCORS設定（GET・Authorization・Range）とファイルURLを確認してください。"
       : "WebDAVに接続してから再生してください。";

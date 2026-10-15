@@ -97,15 +97,15 @@ button { color: inherit; }
 .chapter-select:hover, .chapter-select.is-active { border-color: rgba(200,212,154,.16); background: rgba(200,212,154,.05); color: var(--accent); }
 .chapter-time { color: #81837b; font: 9px var(--mono); }
 .chapter-name { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.webdav-panel { margin-top: 17px; padding: 19px 20px 14px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.018); }
-.webdav-heading { display: flex; align-items: center; justify-content: space-between; }
-.webdav-heading h2 { margin: 5px 0 0; font-size: 14px; font-weight: 500; }
+.webdav-panel, .jellyfin-panel { margin-top: 17px; padding: 19px 20px 14px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.018); }
+.webdav-heading, .jellyfin-heading { display: flex; align-items: center; justify-content: space-between; }
+.webdav-heading h2, .jellyfin-heading h2 { margin: 5px 0 0; font-size: 14px; font-weight: 500; }
 .webdav-lock { color: var(--accent); font-size: 15px; }
-.webdav-form { display: grid; gap: 10px; margin-top: 15px; }
-.webdav-form label { display: grid; min-width: 0; gap: 5px; color: #a5a79f; font-size: 9px; }
-.webdav-form input { width: 100%; min-width: 0; min-height: 36px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: rgba(255,255,255,.025); color: #f3f0e8; font-size: 11px; }
-.webdav-form input:focus { border-color: rgba(200,212,154,.55); }
-.webdav-form input::placeholder { color: #777970; }
+.webdav-form, .jellyfin-form { display: grid; gap: 10px; margin-top: 15px; }
+.webdav-form label, .jellyfin-form label { display: grid; min-width: 0; gap: 5px; color: #a5a79f; font-size: 9px; }
+.webdav-form input, .jellyfin-form input { width: 100%; min-width: 0; min-height: 36px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: rgba(255,255,255,.025); color: #f3f0e8; font-size: 11px; }
+.webdav-form input:focus, .jellyfin-form input:focus { border-color: rgba(200,212,154,.55); }
+.webdav-form input::placeholder, .jellyfin-form input::placeholder { color: #777970; }
 .webdav-credentials { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .webdav-actions { display: flex; gap: 8px; }
 .webdav-actions button, .webdav-pathbar button { min-height: 36px; padding: 7px 12px; border: 1px solid rgba(200,212,154,.3); border-radius: 4px; background: transparent; color: var(--accent); cursor: pointer; font-size: 10px; }
@@ -212,8 +212,8 @@ footer span { padding-left: 8px; color: #92977c; }
   .chapters-panel { padding: 16px; }
   .add-chapter-button { min-height: 44px; padding: 8px 12px; }
   .chapter-nav-button { min-height: 44px; }
-  .webdav-panel { padding: 16px; }
-  .webdav-form input { min-height: 44px; }
+  .webdav-panel, .jellyfin-panel { padding: 16px; }
+  .webdav-form input, .jellyfin-form input { min-height: 44px; }
   .webdav-actions button { min-height: 44px; }
   .webdav-pathbar button { min-height: 44px; }
   .webdav-entry { min-height: 48px; }

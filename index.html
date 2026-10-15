@@ -15,7 +15,7 @@
           <span class="brand-mark" aria-hidden="true">秋</span>
           <span>文庫<span class="brand-subtitle">AUDIOBOOK PLAYER</span></span>
         </a>
-        <span class="local-badge"><span class="status-dot"></span>この端末で再生</span>
+        <span class="local-badge"><span class="status-dot"></span>ストリーミング対応</span>
       </header>
 
       <section class="workspace" aria-label="オーディオブックプレーヤー">
@@ -23,7 +23,7 @@
           <div class="section-heading">
             <span class="eyebrow">YOUR LISTENING SPACE</span>
             <h1>物語に、<em>耳をすます。</em></h1>
-            <p>手元にあるオーディオブックを、ここでゆっくり楽しもう。</p>
+            <p>Jellyfinのライブラリや手元の音源から、物語をストリーミングで楽しもう。</p>
           </div>
 
           <div class="now-playing-card">
@@ -86,6 +86,40 @@
             <ol class="chapter-list" id="chapterList" aria-label="チャプター一覧" hidden></ol>
           </section>
 
+          <section class="jellyfin-panel" aria-labelledby="jellyfinTitle">
+            <div class="jellyfin-heading">
+              <div><span class="eyebrow">MEDIA SERVER</span><h2 id="jellyfinTitle">Jellyfinライブラリ</h2></div>
+              <span class="webdav-lock" aria-hidden="true">◈</span>
+            </div>
+            <form id="jellyfinForm" class="jellyfin-form">
+              <label>JellyfinサーバーURL
+                <input id="jellyfinUrl" type="url" inputmode="url" placeholder="https://jellyfin.example.com/" autocomplete="url" required>
+              </label>
+              <div class="webdav-credentials">
+                <label>ユーザー名
+                  <input id="jellyfinUsername" type="text" autocomplete="username" required>
+                </label>
+                <label>パスワード
+                  <input id="jellyfinPassword" type="password" autocomplete="current-password" required>
+                </label>
+              </div>
+              <div class="webdav-actions">
+                <button type="submit" id="jellyfinConnectButton">接続</button>
+                <button type="button" id="jellyfinDisconnectButton" disabled>切断</button>
+                <button type="button" id="jellyfinRefreshButton" disabled>更新</button>
+              </div>
+            </form>
+            <p id="jellyfinStatus" class="webdav-status" aria-live="polite">ログイン情報は接続中だけメモリー上で使用します。</p>
+            <div id="jellyfinBrowser" class="webdav-browser" hidden>
+              <div class="webdav-pathbar">
+                <button id="jellyfinParentButton" type="button" disabled aria-label="親フォルダーへ">‹ 戻る</button>
+                <span id="jellyfinCurrentPath"></span>
+              </div>
+              <p id="jellyfinEmpty" class="webdav-empty" hidden>このフォルダーに音声ファイルはありません。</p>
+              <ul id="jellyfinList" class="webdav-list" aria-label="Jellyfinライブラリ"></ul>
+            </div>
+          </section>
+
           <section class="webdav-panel" aria-labelledby="webDavTitle">
             <div class="webdav-heading">
               <div><span class="eyebrow">NETWORK LIBRARY</span><h2 id="webDavTitle">WebDAVライブラリ</h2></div>
@@ -146,7 +180,7 @@
           <p class="queue-no-results" id="queueNoResults" hidden>一致する音源がありません。</p>
           <ol class="track-list" id="trackList" aria-label="再生リスト"></ol>
           <button class="clear-button" id="clearButton" type="button" hidden>リストをクリア</button>
-          <p class="privacy-note"><span aria-hidden="true">◈</span> 端末から追加した音源はアップロードせず、このブラウザー内に保存します。<br>WebDAV音源はURLのみ保存し、認証情報は接続中だけ使用します。</p>
+          <p class="privacy-note"><span aria-hidden="true">◈</span> 端末から追加した音源はアップロードせず、このブラウザー内に保存します。<br>ネットワーク音源は参照情報のみ保存し、認証情報は接続中だけ使用します。</p>
         </aside>
       </section>
       <footer>TAKE A MOMENT FOR YOURSELF <span>✳</span></footer>
