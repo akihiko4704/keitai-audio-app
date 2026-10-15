@@ -163,30 +163,45 @@ footer span { padding-left: 8px; color: #92977c; }
   .workspace { display: block; padding: 38px 0 40px; }
   .section-heading { margin-bottom: 23px; }
   .section-heading h1 { font-size: 27px; }
-  .now-playing-card { grid-template-columns: 112px minmax(0,1fr); gap: 18px; padding: 17px; }
-  .cover-art { min-height: 172px; padding: 12px; }
+  .now-playing-card { grid-template-columns: minmax(0,1fr); gap: 22px; padding: 18px; }
+  .cover-art { width: min(100%, 220px); min-height: 0; aspect-ratio: 1; justify-self: center; padding: 18px; }
   .cover-sun { top: 24px; right: 15px; width: 47px; height: 47px; }
   .cover-title { font-size: 23px; }
   .cover-author { font-size: 6px; }
   .cover-number { top: 10px; left: 11px; font-size: 7px; }
-  .track-details h2 { font-size: 15px; }
-  .track-details > p { font-size: 9px; }
+  .track-details h2 { font-size: 17px; white-space: normal; overflow-wrap: anywhere; }
+  .track-details > p { font-size: 10px; white-space: normal; }
   .progress-wrap { margin-top: 22px; }
   .transport { margin-top: 15px; }
-  .play-button { width: 42px; height: 42px; }
+  .icon-button { width: 44px; height: 44px; }
+  .play-button { width: 52px; height: 52px; }
   .player-options { margin-top: 15px; }
+  .range { height: 24px; background: linear-gradient(to bottom, transparent 10px, #42443c 10px 14px, transparent 14px); }
+  .range::-webkit-slider-thumb { width: 14px; height: 14px; }
+  .range::-moz-range-thumb { width: 14px; height: 14px; }
+  .repeat-button, .speed-control select { min-width: 44px; min-height: 44px; }
+  .volume-control { width: 100px; }
+  .volume-control .range { width: 0; min-width: 0; flex: 1; }
+  .chapters-panel { padding: 16px; }
+  .add-chapter-button { min-height: 44px; padding: 8px 12px; }
+  .chapter-nav-button { min-height: 44px; }
   .drop-zone { flex-wrap: wrap; gap: 10px; padding: 13px; }
+  .drop-zone { min-height: 80px; }
   .drop-copy small { font-size: 8px; }
   .file-types { width: 100%; margin-left: 42px; }
-  .queue-panel { min-height: 0; margin-top: 36px; padding: 23px 0 0; border-top: 1px solid var(--line); border-left: 0; }
+  .folder-import button { min-height: 44px; padding: 9px 12px; }
+  .queue-panel { min-height: 0; margin-top: 30px; padding: 23px 0 0; border-top: 1px solid var(--line); border-left: 0; }
   .queue-empty { min-height: 150px; }
   .track-list { max-height: 230px; }
+  .track-item { grid-template-columns: minmax(0,1fr) auto 44px; min-height: 64px; }
+  .track-select { min-height: 44px; }
+  .track-remove { width: 44px; height: 44px; opacity: .8; }
+  .queue-search input { min-height: 44px; }
   .privacy-note { margin-top: 17px; }
 }
 @media (max-width: 380px) {
-  .now-playing-card { grid-template-columns: 92px minmax(0,1fr); gap: 12px; padding: 12px; }
-  .cover-art { min-height: 150px; padding: 9px; }
+  .now-playing-card { gap: 16px; padding: 12px; }
+  .cover-art { padding: 12px; }
   .cover-title { font-size: 20px; }
-  .icon-button { width: 24px; }
-  .play-button { width: 38px; height: 38px; }
+  .volume-control { width: 88px; }
 }
